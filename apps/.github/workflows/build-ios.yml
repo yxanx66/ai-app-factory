@@ -1,21 +1,195 @@
-name: Build iOS Apps
+name: Build & Upload iOS Apps
 on:
   push:
     branches: [master, main]
+    paths:
+      - 'apps/**'
   workflow_dispatch:
 
 jobs:
-  check-swift:
+  hvac-duct-calculator:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Check Swift syntax - HVAC Duct Calculator
-        run: |
-          cd apps/hvac-duct-calculator/ios/HVACDuctCalculator
-          swiftc -parse *.swift 2>&1 || echo "⚠️  Syntax check completed (may need Xcode project for full build)"
 
-      - name: Check Swift syntax - Landscape Planner
+      - name: Create Xcode project with xcodegen
         run: |
-          cd apps/landscape-planner/ios/LandscapePlanner
-          swiftc -parse *.swift 2>&1 || echo "⚠️  Syntax check completed"
+          cd apps/hvac-duct-calculator/ios
+          # Generate project.yml if not exists
+          cat > project.yml << 'YML'
+          name: HVACDuctCalculator
+          options:
+            bundleIdPrefix: com.ai-app-factory
+            deploymentTarget:
+              iOS: "16.0"
+          targets:
+            HVACDuctCalculator:
+              type: application
+              platform: iOS
+              sources: [HVACDuctCalculator]
+              settings:
+                base:
+                  INFOPLIST_FILE: HVACDuctCalculator/Info.plist
+                  PRODUCT_BUNDLE_IDENTIFIER: com.ai-app-factory.hvacductcalculator
+                  MARKETING_VERSION: "1.0"
+                  CURRENT_PROJECT_VERSION: "1"
+          YML
+          
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Create Info.plist
+        run: |
+          cat > apps/hvac-duct-calculator/ios/HVACDuctCalculator/Info.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>HVAC Duct Calculator</string>
+              <key>CFBundleDisplayName</key>
+              <string>Duct Calculator</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.ai-app-factory.hvacductcalculator</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+              </array>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>armv7</string>
+              </array>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Build archive
+        run: |
+          cd apps/hvac-duct-calculator/ios
+          xcodebuild archive \
+            -project HVACDuctCalculator.xcodeproj \
+            -scheme HVACDuctCalculator \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/HVACDuctCalculator.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Export IPA (unsigned)
+        run: |
+          cat > apps/hvac-duct-calculator/ios/ExportOptions.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+          </dict>
+          </plist>
+          PLIST
+          
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/HVACDuctCalculator.xcarchive \
+            -exportPath $RUNNER_TEMP/build \
+            -exportOptionsPlist apps/hvac-duct-calculator/ios/ExportOptions.plist \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HVACDuctCalculator.ipa
+          path: ${{ runner.temp }}/build/HVACDuctCalculator.ipa
+
+  landscape-planner:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Xcode project
+        run: |
+          cd apps/landscape-planner/ios
+          cat > project.yml << 'YML'
+          name: LandscapePlanner
+          options:
+            bundleIdPrefix: com.ai-app-factory
+            deploymentTarget:
+              iOS: "16.0"
+          targets:
+            LandscapePlanner:
+              type: application
+              platform: iOS
+              sources: [LandscapePlanner]
+              settings:
+                base:
+                  INFOPLIST_FILE: LandscapePlanner/Info.plist
+                  PRODUCT_BUNDLE_IDENTIFIER: com.ai-app-factory.landscapeplanner
+                  MARKETING_VERSION: "1.0"
+                  CURRENT_PROJECT_VERSION: "1"
+          YML
+          
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Create Info.plist
+        run: |
+          mkdir -p apps/landscape-planner/ios/LandscapePlanner
+          cat > apps/landscape-planner/ios/LandscapePlanner/Info.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>Landscape Planner</string>
+              <key>CFBundleDisplayName</key>
+              <string>Landscape Planner</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.ai-app-factory.landscapeplanner</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+              </array>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>armv7</string>
+              </array>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Build archive
+        run: |
+          cd apps/landscape-planner/ios
+          xcodebuild archive \
+            -project LandscapePlanner.xcodeproj \
+            -scheme LandscapePlanner \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/LandscapePlanner.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LandscapePlanner.ipa
+          path: ${{ runner.temp }}/build/LandscapePlanner.ipa
