@@ -291,7 +291,7 @@ struct AboutView: View {
                     Divider().padding(.horizontal)
                     
                     VStack(spacing: 12) {
-                        Link(destination: URL(string: "https://ai-app-factory.com/privacy")!) {
+                        Link(destination: URL(string: "https://yxanx66.github.io/ai-app-factory/privacy.html")!) {
                             Label("Privacy Policy", systemImage: "hand.raised")
                                 .font(.subheadline)
                         }
